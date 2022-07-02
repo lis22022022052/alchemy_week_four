@@ -1,5 +1,7 @@
+import React from "react";
 import { useState } from "react";
 import { NFTCard } from "../components/nftCard";
+import { Pagination } from "../components/pagination";
 
 const Home = () => {
   const [wallet, setWalletAddress] = useState("");
@@ -7,26 +9,29 @@ const Home = () => {
   const [NFTs, setNFTs] = useState([]);
   const [fetchForCollection, setFetchForCollection] = useState(false);
 
-  const fetchNFTs = async () => {
-    let nfts;
-    console.log("fetching nfts");
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageKeys, setPageKeys] = useState([""]);
+
+  const getBaseUrl = () => {
     const api_key = "TWOuqthMWIy4KTiLF7APNkSWnUf3U5js";
-    const baseURL = `https://eth-mainnet.alchemyapi.io/v2/${api_key}/getNFTs/`;
+    return `https://eth-mainnet.alchemyapi.io/v2/${api_key}`;
+  };
 
-    if (!collection.length) {
-      var requestOptions = {
-        method: "GET",
-      };
+  const fetchNFTs = async () => {
+    console.log("fetching nfts");
 
-      const fetchURL = `${baseURL}?owner=${wallet}`;
-      console.log(fetchURL);
-      nfts = await fetch(fetchURL, requestOptions).then((data) => data.json());
-    } else {
-      console.log("fetching nfts for collection owned by address");
-      const fetchURL2 = `${baseURL}?owner=${wallet}&contractAddresses%5B%5D=${collection}`;
-      console.log(fetchURL2);
-      nfts = await fetch(fetchURL2, requestOptions).then((data) => data.json());
-    }
+    const baseURL = `${getBaseUrl()}/getNFTs/`;
+    const fetchURL = !collection
+      ? `${baseURL}?owner=${wallet}`
+      : `${baseURL}?owner=${wallet}&contractAddresses%5B%5D=${collection}`;
+
+    const requestOptions = {
+      method: "GET",
+    };
+
+    const nfts = await fetch(fetchURL, requestOptions).then((data) =>
+      data.json()
+    );
 
     if (nfts) {
       console.log(`nfts: `, nfts);
@@ -34,24 +39,41 @@ const Home = () => {
     }
   };
 
-  const fetchNFTsForCollection = async () => {
-    if (collection.length) {
-      var requestOptions = {
-        method: "GET",
-      };
+  const fetchNFTsForCollection = async (startToken = "", pageIndex = 0) => {
+    if (!collection.length) return;
 
-      const api_key = "TWOuqthMWIy4KTiLF7APNkSWnUf3U5js";
-      const baseURL = `https://eth-mainnet.alchemyapi.io/v2/${api_key}/getNFTsForCollection/`;
-      const fetchURL2 = `${baseURL}?contractAddress=${collection}&withMetadata=${true}`;
-      console.log(fetchURL2);
-      const nfts = await fetch(fetchURL2, requestOptions).then((data) =>
-        data.json()
-      );
-      if (nfts) {
-        console.log(`NFTs in collection: `, nfts);
-        setNFTs(nfts.nfts);
-      }
+    const requestOptions = {
+      method: "GET",
+    };
+
+    const baseURL = `${getBaseUrl()}/getNFTsForCollection/`;
+    const fetchURL = `${baseURL}?contractAddress=${collection}&withMetadata=${true}&startToken=${startToken}`;
+
+    const nfts = await fetch(fetchURL, requestOptions).then((data) =>
+      data.json()
+    );
+
+    if (nfts) {
+      console.log(`NFTs in collection: `, nfts);
+      setNFTs(nfts.nfts);
+
+      console.log("nextToken: ", nfts.nextToken);
+      if (!nfts.nextToken) return;
+
+      setPageKeys((prevKeys) => {
+        const newKeys = [...prevKeys];
+        newKeys[pageIndex + 1] = nfts.nextToken;
+
+        return newKeys;
+      });
     }
+  };
+
+  const onClickPage = (pageIndex) => {
+    if (currentPage === pageIndex) return;
+
+    fetchNFTsForCollection(pageKeys[pageIndex], pageIndex);
+    setCurrentPage(pageIndex);
   };
 
   return (
@@ -86,6 +108,7 @@ const Home = () => {
           Fetch for collection
         </label>
         <button
+          disabled={!wallet && !collection}
           className="disabled: bg-slate-500 text-white bg-blue-400 px-4 py-2 mt-3 rounded-sm w-1/5"
           onClick={() => {
             if (fetchForCollection) {
@@ -98,12 +121,30 @@ const Home = () => {
           Let's go!
         </button>
       </div>
+      {pageKeys.length > 1 && (
+        <Pagination
+          key={"top-pagination-bar"}
+          currentPage={currentPage}
+          pageKeys={pageKeys}
+          onClickPage={onClickPage}
+          className="border-t"
+        />
+      )}
       <div className="flex flex-wrap gap-y-12 mt-4 w-5/6 gap-x-2 justify-center">
         {NFTs.length &&
-          NFTs.map((nft) => {
-            return <NFTCard nft={nft} key={`${nft.id.tokenId}`} />;
+          NFTs.map((nft, i) => {
+            return <NFTCard nft={nft} key={`nft-card-${i}`} />;
           })}
       </div>
+      {pageKeys.length > 1 && (
+        <Pagination
+          key={"bottom-pagination-bar"}
+          currentPage={currentPage}
+          pageKeys={pageKeys}
+          onClickPage={onClickPage}
+          className="border-t"
+        />
+      )}
     </div>
   );
 };
